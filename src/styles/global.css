@@ -130,6 +130,7 @@
 /* Tweet theme — site palette instead of react-tweet's blue-tinted dark theme */
 html .react-tweet-theme {
   max-width: none;
+  --tweet-container-margin: 0;
   --tweet-bg-color: transparent;
   --tweet-bg-color-hover: var(--muted);
   --tweet-border: 1px solid var(--border);
@@ -160,7 +161,7 @@ html .react-tweet-theme {
 }
 
 @utility view-container {
-  @apply mx-auto max-w-2xl scroll-mt-6 space-y-2 px-7.5 sm:px-10;
+  @apply mx-auto max-w-2xl scroll-mt-6 space-y-2 px-4;
 }
 
 @utility view-container-title {

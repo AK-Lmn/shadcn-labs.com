@@ -14,6 +14,10 @@ const idleProjects = PROJECTS.filter(
   (project) => !listed.has(project.name),
 ).map((project) => project.name);
 
+if (!listed.has("shadcn-labs.com")) {
+  idleProjects.push("shadcn-labs.com");
+}
+
 const formatDate = (value: string): string =>
   new Date(value).toLocaleDateString("en-US", {
     day: "numeric",

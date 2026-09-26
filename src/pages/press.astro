@@ -33,7 +33,7 @@ const tweets = await Promise.all(
     <h2>
       <a href="#videos" class="view-container-title">VIDEOS</a>
     </h2>
-    <ul class="space-y-6 py-2">
+    <ul class="space-y-4">
       {
         PRESS_VIDEOS.map((video) => (
           <li class="overflow-hidden rounded-lg border border-border">
@@ -57,7 +57,7 @@ const tweets = await Promise.all(
     <h2>
       <a href="#newsletters" class="view-container-title">NEWSLETTERS</a>
     </h2>
-    <ul class="space-y-3 py-2">
+    <ul class="space-y-4">
       {
         PRESS_NEWSLETTERS.map((item) => {
           const domain = item.faviconDomain ?? new URL(item.url).hostname;
@@ -101,10 +101,10 @@ const tweets = await Promise.all(
     <h2>
       <a href="#posts" class="view-container-title">POSTS</a>
     </h2>
-    <ul class="space-y-4 py-2">
+    <ul class="space-y-4">
       {
         tweets.map(({ id, tweet }) => (
-          <li class="[--tweet-container-margin:0rem]">
+          <li>
             {tweet ? (
               <EmbeddedTweet tweet={tweet} />
             ) : (
