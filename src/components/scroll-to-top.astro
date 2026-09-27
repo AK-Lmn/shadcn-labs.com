@@ -1,0 +1,105 @@
+---
+import { ArrowUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+---
+
+<Button
+  type="button"
+  variant="secondary"
+  size="icon"
+  className="border-border shadow-md"
+  aria-label="Scroll to top"
+  data-scroll-to-top
+  data-visible="false"
+  data-direction="up"
+>
+  <ArrowUp aria-hidden="true" />
+</Button>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>(
+    "[data-scroll-to-top]",
+  );
+  const footer = document.querySelector("footer");
+
+  if (button) {
+    let previousScrollY = window.scrollY;
+    let footerIsVisible = footer
+      ? footer.getBoundingClientRect().top < window.innerHeight &&
+        footer.getBoundingClientRect().bottom > 0
+      : false;
+
+    const updateButton = () => {
+      const {scrollY} = window;
+
+      if (scrollY < previousScrollY) {
+        button.dataset.direction = "up";
+      } else if (scrollY > previousScrollY) {
+        button.dataset.direction = "down";
+      }
+
+      previousScrollY = scrollY;
+      button.dataset.visible = String(scrollY > 400 && !footerIsVisible);
+    };
+
+    window.addEventListener("scroll", updateButton, { passive: true });
+    window.addEventListener("resize", updateButton, { passive: true });
+
+    if (footer && "IntersectionObserver" in window) {
+      const footerObserver = new IntersectionObserver(([entry]) => {
+        footerIsVisible = entry.isIntersecting;
+        updateButton();
+      });
+      footerObserver.observe(footer);
+    }
+
+    button.addEventListener("click", () => {
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      window.scrollTo({
+        behavior: prefersReducedMotion ? "instant" : "smooth",
+        top: 0,
+      });
+    });
+
+    updateButton();
+  }
+</script>
+
+<style>
+  :global([data-scroll-to-top]) {
+    position: fixed;
+    right: 1rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    z-index: 50;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 180ms ease,
+      visibility 180ms;
+  }
+
+  :global([data-scroll-to-top][data-visible="true"]) {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  :global([data-scroll-to-top][data-direction="down"]) {
+    opacity: 0.4;
+  }
+
+  :global([data-scroll-to-top][data-direction="down"]:hover),
+  :global([data-scroll-to-top][data-direction="down"]:focus-visible) {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global([data-scroll-to-top]) {
+      transition: none;
+    }
+  }
+</style>
