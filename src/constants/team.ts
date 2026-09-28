@@ -9,4 +9,9 @@ export const TEAM = [
     name: "Abdullah Mukadam",
     url: "https://www.abdullahmukadam.fun",
   },
+  {
+    description: "Maintainer of ogimagecn",
+    name: "Bhaumik Mistry",
+    url: "https://www.bhaumikmistry.com",
+  },
 ];
