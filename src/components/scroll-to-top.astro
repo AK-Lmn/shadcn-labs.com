@@ -20,17 +20,12 @@ import { Button } from "@/components/ui/button";
   const button = document.querySelector<HTMLButtonElement>(
     "[data-scroll-to-top]",
   );
-  const footer = document.querySelector("footer");
 
   if (button) {
     let previousScrollY = window.scrollY;
-    let footerIsVisible = footer
-      ? footer.getBoundingClientRect().top < window.innerHeight &&
-        footer.getBoundingClientRect().bottom > 0
-      : false;
 
     const updateButton = () => {
-      const {scrollY} = window;
+      const { scrollY } = window;
 
       if (scrollY < previousScrollY) {
         button.dataset.direction = "up";
@@ -39,19 +34,11 @@ import { Button } from "@/components/ui/button";
       }
 
       previousScrollY = scrollY;
-      button.dataset.visible = String(scrollY > 400 && !footerIsVisible);
+      button.dataset.visible = String(scrollY > 400);
     };
 
     window.addEventListener("scroll", updateButton, { passive: true });
     window.addEventListener("resize", updateButton, { passive: true });
-
-    if (footer && "IntersectionObserver" in window) {
-      const footerObserver = new IntersectionObserver(([entry]) => {
-        footerIsVisible = entry.isIntersecting;
-        updateButton();
-      });
-      footerObserver.observe(footer);
-    }
 
     button.addEventListener("click", () => {
       const prefersReducedMotion = window.matchMedia(
