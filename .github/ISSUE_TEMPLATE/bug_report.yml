@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible bug in shadcn-labs.com.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Search existing issues first and verify the bug still reproduces on the latest version.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clearly describe the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `pnpm install && pnpm dev`
+        2. Navigate to the affected page
+        3. See the problem
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected vs. actual behavior
+      description: Explain what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, browser, Node.js version, and package manager.
+      render: shell
+    validations:
+      required: true
