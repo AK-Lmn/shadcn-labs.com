@@ -4,10 +4,24 @@ import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { PROJECTS } from "@/constants/projects";
 import { UTM_PARAMS } from "@/constants/site";
-import { getIssuesByRepo } from "@/lib/github";
+import { ISSUES_CACHE_TTL_SECONDS, getIssuesByRepo } from "@/lib/github";
 import { addQueryParams } from "@/lib/url";
 
-const groups = await getIssuesByRepo();
+// Rendered on demand so the edge cache can serve it for minutes at a time
+// instead of freezing a snapshot into the build.
+export const prerender = false;
+
+if (Astro.cache.enabled) {
+  Astro.cache.set({
+    maxAge: ISSUES_CACHE_TTL_SECONDS,
+    // Keep serving the last good copy for an hour while it revalidates, so a
+    // GitHub hiccup never takes the page down.
+    swr: 3600,
+    tags: ["issues"],
+  });
+}
+
+const { fetchedAt, groups, stale } = await getIssuesByRepo();
 const total = groups?.reduce((sum, group) => sum + group.count, 0) ?? 0;
 const listed = new Set(groups?.map((group) => group.name));
 const idleProjects = PROJECTS.filter(
@@ -24,6 +38,16 @@ const formatDate = (value: string): string =>
     month: "short",
     year: "numeric",
   });
+
+const formatUpdatedAt = (value: string): string =>
+  new Date(value).toLocaleString("en-US", {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
 ---
 
 <BaseLayout
@@ -37,10 +61,19 @@ const formatDate = (value: string): string =>
       <a href="#issues" class="view-container-title">OPEN ISSUES</a>
     </h2>
 
+    <p class="text-muted-foreground">
+      Last updated <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
+      {
+        stale && (
+          <> · GitHub did not respond to the last refresh, so this may be out of date</>
+        )
+      }
+    </p>
+
     {
       groups === null ? (
         <p>
-          Could not load issues right now. See
+          Could not load issues right now. See{" "}
           <a
             target="_blank"
             href={addQueryParams("https://github.com/shadcn-labs", UTM_PARAMS)}
