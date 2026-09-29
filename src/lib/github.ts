@@ -24,7 +24,6 @@ export interface GitHubContributor {
   contributions: number;
   html_url: string;
   login: string;
-  name: string | null;
   type: string;
 }
 
@@ -38,7 +37,6 @@ export interface Contributor {
   contributions: number;
   htmlUrl: string;
   login: string;
-  name: string | null;
   repos: string[];
 }
 
@@ -53,8 +51,20 @@ const CONTRIBUTOR_LABELS = new Set(["good first issue", "help wanted"]);
 /** How long contributor data stays fresh, in seconds. */
 export const CACHE_TTL_SECONDS = 3600;
 
+/**
+ * How long a failed refresh is remembered, in seconds. Short, so the page
+ * recovers as soon as GitHub stops rate limiting us, but long enough that a
+ * burst of visitors cannot spend the whole anonymous budget on retries.
+ */
+export const FAILURE_CACHE_TTL_SECONDS = 60;
+
+/**
+ * Agent logins that are still typed as a `User` account, so the `[bot]` suffix
+ * does not catch them. Bounded on the right so `codysmith` survives a `cody`
+ * match.
+ */
 const AGENT_LOGIN =
-  /^(?:aider|cody|cohere|codex|claude|copilot|cursor|deepseek|dependabot|devin|gemini|greptile|qwen|renovate|replit|sourcery|sweep|windsurf)/iu;
+  /^(?:aider|cody|cohere|codex|claude|copilot|cursor|deepseek|dependabot|devin|gemini|greptile|qwen|renovate|replit|sourcery|sweep|windsurf)(?:$|[-_.[\d])/iu;
 
 const contributorPriority = (issue: GitHubIssue): number => {
   const labels = new Set(issue.labels.map((label) => label.name.toLowerCase()));
@@ -73,6 +83,20 @@ const isHuman = (contributor: GitHubContributor): boolean =>
   !contributor.login.endsWith("[bot]") &&
   !AGENT_LOGIN.test(contributor.login);
 
+class GitHubRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`GitHub request failed with ${status}`);
+    this.name = "GitHubRequestError";
+    this.status = status;
+  }
+}
+
+const isRateLimited = (reason: unknown): boolean =>
+  reason instanceof GitHubRequestError &&
+  (reason.status === 403 || reason.status === 429);
+
 const githubFetch = async <T>(url: URL): Promise<T> => {
   const response = await fetch(url, {
     headers: {
@@ -81,7 +105,7 @@ const githubFetch = async <T>(url: URL): Promise<T> => {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub request failed with ${response.status}`);
+    throw new GitHubRequestError(response.status);
   }
 
   return (await response.json()) as T;
@@ -181,7 +205,7 @@ const fetchAllPages = async <T>(path: string, page = 1): Promise<T[]> => {
 
 interface CachedContributors {
   expires: number;
-  value: Contributor[];
+  value: Contributor[] | null;
 }
 
 const contributorCache = new Map<string, CachedContributors>();
@@ -197,7 +221,12 @@ const loadContributors = async (org: string): Promise<Contributor[] | null> => {
     return null;
   }
 
-  // allSettled: one rate-limited or 404 repo should not blank the page.
+  if (repos.length === 0) {
+    return [];
+  }
+
+  // allSettled: one missing repo should not blank the page. Rate limiting is
+  // handled separately below, because a partial list is worse than none.
   const results = await Promise.allSettled(
     repos.map((repo) =>
       fetchAllPages<GitHubContributor>(
@@ -206,10 +235,12 @@ const loadContributors = async (org: string): Promise<Contributor[] | null> => {
     )
   );
   const merged = new Map<string, Contributor>();
+  let rateLimited = false;
   let succeeded = 0;
 
   for (const [index, result] of results.entries()) {
     if (result.status === "rejected") {
+      rateLimited ||= isRateLimited(result.reason);
       continue;
     }
 
@@ -229,14 +260,14 @@ const loadContributors = async (org: string): Promise<Contributor[] | null> => {
         contributions: entry.contributions,
         htmlUrl: entry.html_url,
         login: entry.login,
-        name: entry.name,
         repos: [repos[index].name],
       });
     }
   }
 
-  // Every repo failing means an auth/rate-limit problem, not an empty org.
-  if (succeeded === 0) {
+  // A partial list would be cached as if it were complete, so any rate limit
+  // fails the refresh. Every repo failing is an auth problem, not an empty org.
+  if (rateLimited || succeeded === 0) {
     return null;
   }
 
@@ -253,8 +284,9 @@ const loadContributors = async (org: string): Promise<Contributor[] | null> => {
  * There is no aggregate endpoint on the GitHub REST API, so this costs one
  * request per repo. The route that calls this caches its response for
  * CACHE_TTL_SECONDS, and this in-process memo is a second layer that keeps a
- * warm server from re-fetching inside that window. No token needed: 25
- * requests an hour sits comfortably inside the anonymous 60 req/hr limit.
+ * warm server from re-fetching inside that window. Failures are memoized too,
+ * for FAILURE_CACHE_TTL_SECONDS, so a rate-limited burst cannot spend the
+ * anonymous 60 req/hr budget on retries. No token needed.
  */
 export const getContributors = async (
   org = ORG
@@ -271,11 +303,13 @@ export const getContributors = async (
     console.warn(
       "[github] Could not load contributors — the GitHub API may be rate limited."
     );
-    return null;
   }
 
   contributorCache.set(org, {
-    expires: Date.now() + CACHE_TTL_SECONDS * 1000,
+    expires:
+      Date.now() +
+      (contributors === null ? FAILURE_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS) *
+        1000,
     value: contributors,
   });
 

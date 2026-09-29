@@ -4,22 +4,33 @@ import AsciiDivider from "@/components/ascii-divider.astro";
 import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { UTM_PARAMS } from "@/constants/site";
-import { CACHE_TTL_SECONDS, getContributors } from "@/lib/github";
+import {
+  CACHE_TTL_SECONDS,
+  FAILURE_CACHE_TTL_SECONDS,
+  getContributors,
+} from "@/lib/github";
 import { addQueryParams } from "@/lib/url";
 
 // Rendered on demand so the edge cache can serve it for a full hour instead of
 // freezing a snapshot into the build.
 export const prerender = false;
 
+const contributors = await getContributors();
+
+// Set after the fetch: an error page must not sit in the edge cache for an
+// hour, but it still needs a short TTL so retries do not burn the API budget.
 if (Astro.cache.enabled) {
-  Astro.cache.set({
-    maxAge: CACHE_TTL_SECONDS,
-    swr: CACHE_TTL_SECONDS,
-    tags: ["contributors"],
-  });
+  Astro.cache.set(
+    contributors === null
+      ? { maxAge: FAILURE_CACHE_TTL_SECONDS, tags: ["contributors"] }
+      : {
+          maxAge: CACHE_TTL_SECONDS,
+          swr: CACHE_TTL_SECONDS,
+          tags: ["contributors"],
+        }
+  );
 }
 
-const contributors = await getContributors();
 const total = contributors?.length ?? 0;
 const commits =
   contributors?.reduce((sum, person) => sum + person.contributions, 0) ?? 0;
@@ -44,7 +55,7 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
           <a
             target="_blank"
             href={addQueryParams(
-              "https://github.com/orgs/shadcn-labs/people",
+              "https://github.com/shadcn-labs",
               UTM_PARAMS,
             )}
           >
@@ -67,7 +78,7 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
 
     {
       total > 0 && (
-        <ul class="pt-2">
+        <ul class="grid grid-cols-1 gap-x-6 gap-y-4 pt-2 sm:grid-cols-2">
           {contributors?.map((person) => (
             <li class="flex items-start gap-3">
               <Image
@@ -84,11 +95,8 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
                   target="_blank"
                   href={addQueryParams(person.htmlUrl, UTM_PARAMS)}
                 >
-                  {person.name ?? `@${person.login}`}
+                  @{person.login}
                 </a>
-                {person.name && (
-                  <span class="text-muted-foreground"> @{person.login}</span>
-                )}
                 <br />
                 <span class="text-muted-foreground inline-flex flex-wrap items-center gap-1.5">
                   <span class="font-mono">{person.contributions}</span>{" "}
