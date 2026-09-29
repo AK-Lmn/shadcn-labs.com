@@ -47,4 +47,5 @@ export const NAV = [
   { href: ROUTES.ABOUT, label: "about" },
   { href: ROUTES.CONTACT, label: "contact" },
   { href: ROUTES.PRESS, label: "press" },
+  { href: ROUTES.CONTRIBUTORS, label: "contributors" },
 ];

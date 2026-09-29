@@ -1,5 +1,6 @@
 ---
 import { TEAM } from "@/constants/team";
+import { ROUTES } from "@/constants/routes";
 import { UTM_PARAMS } from "@/constants/site";
 import { addQueryParams } from "@/lib/url";
 ---
@@ -21,4 +22,8 @@ import { addQueryParams } from "@/lib/url";
       ))
     }
   </ul>
+  <p class="text-muted-foreground">
+    Plus <a href={ROUTES.CONTRIBUTORS}>everyone else who has contributed</a>{" "}
+    across the org.
+  </p>
 </section>
