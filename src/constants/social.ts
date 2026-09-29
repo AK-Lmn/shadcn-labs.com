@@ -1,22 +1,24 @@
+import { LINKS } from "@/constants/links";
+
 export const SOCIALS = [
   {
     name: "X",
-    url: "https://twitter.com/shadcnlabs",
+    url: LINKS.X,
   },
   {
     name: "GitHub",
-    url: "https://github.com/shadcn-labs",
+    url: LINKS.GITHUB,
   },
   {
     name: "Discord",
-    url: "https://discord.com/invite/N6G36KhYK4",
+    url: LINKS.DISCORD,
   },
   {
     name: "Bluesky",
-    url: "https://bsky.app/profile/shadcnlabs.bsky.social",
+    url: LINKS.BLUESKY,
   },
   {
     name: "Reddit",
-    url: "https://reddit.com/r/shadcnlabs",
+    url: LINKS.REDDIT,
   },
 ];
