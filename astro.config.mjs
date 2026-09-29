@@ -1,6 +1,7 @@
 // @ts-check
 import react from "@astrojs/react";
 import vercel from "@astrojs/vercel";
+import { cacheVercel } from "@astrojs/vercel/cache";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
 
@@ -11,6 +12,12 @@ export default defineConfig({
       enabled: false,
     },
   }),
+  // Serves on-demand rendered routes (see src/pages/contributors.astro) from
+  // the Vercel edge, so the GitHub API is hit at most once per TTL no matter
+  // how many people load the page.
+  cache: {
+    provider: cacheVercel(),
+  },
   fonts: [
     {
       cssVariable: "--font-geist-sans",
@@ -29,6 +36,10 @@ export default defineConfig({
     remotePatterns: [
       {
         hostname: "**.public.blob.vercel-storage.com",
+        protocol: "https",
+      },
+      {
+        hostname: "avatars.githubusercontent.com",
         protocol: "https",
       },
     ],
