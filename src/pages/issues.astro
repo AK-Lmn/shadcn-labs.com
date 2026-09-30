@@ -4,10 +4,35 @@ import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { PROJECTS } from "@/constants/projects";
 import { UTM_PARAMS } from "@/constants/site";
-import { getIssuesByRepo } from "@/lib/github";
+import {
+  FAILURE_CACHE_TTL_SECONDS,
+  ISSUES_CACHE_TTL_SECONDS,
+  getIssuesByRepo,
+} from "@/lib/github";
 import { addQueryParams } from "@/lib/url";
 
-const groups = await getIssuesByRepo();
+// Rendered on demand so the edge cache can serve it for minutes at a time
+// instead of freezing a snapshot into the build.
+export const prerender = false;
+
+const { fetchedAt, groups, stale } = await getIssuesByRepo();
+
+// Set after the fetch, so a failed page is not pinned at the edge for a full
+// TTL: no data gets FAILURE_CACHE_TTL_SECONDS, everything else gets five
+// minutes plus an hour of stale-while-revalidate.
+if (Astro.cache.enabled) {
+  Astro.cache.set(
+    groups === null
+      ? { maxAge: FAILURE_CACHE_TTL_SECONDS, tags: ["issues"] }
+      : {
+          maxAge: ISSUES_CACHE_TTL_SECONDS,
+          // Keep serving the last good copy for an hour while it revalidates,
+          // so a GitHub hiccup never takes the page down.
+          swr: 3600,
+          tags: ["issues"],
+        }
+  );
+}
 const total = groups?.reduce((sum, group) => sum + group.count, 0) ?? 0;
 const listed = new Set(groups?.map((group) => group.name));
 const idleProjects = PROJECTS.filter(
@@ -24,6 +49,16 @@ const formatDate = (value: string): string =>
     month: "short",
     year: "numeric",
   });
+
+const formatUpdatedAt = (value: string): string =>
+  new Date(value).toLocaleString("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
 ---
 
 <BaseLayout
@@ -38,9 +73,23 @@ const formatDate = (value: string): string =>
     </h2>
 
     {
+      fetchedAt && (
+        <p class="text-muted-foreground">
+          Last updated{" "}
+          <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
+          {
+            stale && (
+              <> · GitHub did not respond to the last refresh, so this may be out of date</>
+            )
+          }
+        </p>
+      )
+    }
+
+    {
       groups === null ? (
         <p>
-          Could not load issues right now. See
+          Could not load issues right now. See{" "}
           <a
             target="_blank"
             href={addQueryParams("https://github.com/shadcn-labs", UTM_PARAMS)}

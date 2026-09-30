@@ -19,6 +19,20 @@ export interface RepoIssues {
   url: string;
 }
 
+export interface IssuesSnapshot {
+  /** ISO timestamp of the last successful fetch; `null` if there never was one. */
+  fetchedAt: string | null;
+  /** `null` only when we have never had a successful fetch. */
+  groups: RepoIssues[] | null;
+  /** True when a refresh failed and we are serving the previous snapshot. */
+  stale: boolean;
+}
+
+interface SearchPage {
+  items: GitHubIssue[];
+  totalCount: number;
+}
+
 export interface GitHubContributor {
   avatar_url: string;
   contributions: number;
@@ -43,18 +57,31 @@ export interface Contributor {
 const API_URL = "https://api.github.com";
 const ORG = "shadcn-labs";
 const SEARCH_URL = `${API_URL}/search/issues`;
-const QUERY = `org:${ORG} type:issue state:open`;
+const ORG_QUERY = `org:${ORG} type:issue state:open`;
 const PAGE_SIZE = 100;
-const MAX_PAGES = 5;
+/** GitHub's search API refuses to page past 1000 results for one query. */
+const SEARCH_RESULT_CAP = 1000;
+const MAX_PAGES = SEARCH_RESULT_CAP / PAGE_SIZE;
+/**
+ * Repos combined into one search query when the org-wide query hits the
+ * result cap. Several `repo:` qualifiers OR together (verified against the
+ * live API), so a chunk of repos needs one query instead of one per repo,
+ * which keeps the request count as close to ceil(total / PAGE_SIZE) as the
+ * API allows.
+ */
+const REPOS_PER_QUERY = 4;
 const CONTRIBUTOR_LABELS = new Set(["good first issue", "help wanted"]);
 
+/** How long the issues data stays fresh, in seconds. */
+export const ISSUES_CACHE_TTL_SECONDS = 300;
+
 /** How long contributor data stays fresh, in seconds. */
-export const CACHE_TTL_SECONDS = 3600;
+export const CONTRIBUTORS_CACHE_TTL_SECONDS = 3600;
 
 /**
  * How long a failed refresh is remembered, in seconds. Short, so the page
- * recovers as soon as GitHub stops rate limiting us, but long enough that a
- * burst of visitors cannot spend the whole anonymous budget on retries.
+ * recovers as soon as GitHub does, but long enough that a burst of visitors
+ * cannot spend the whole anonymous budget on retries.
  */
 export const FAILURE_CACHE_TTL_SECONDS = 60;
 
@@ -111,78 +138,6 @@ const githubFetch = async <T>(url: URL): Promise<T> => {
   return (await response.json()) as T;
 };
 
-const fetchIssuesPage = async (
-  page: number
-): Promise<{ items: GitHubIssue[]; totalCount: number }> => {
-  const url = new URL(SEARCH_URL);
-  url.searchParams.set("q", QUERY);
-  url.searchParams.set("per_page", String(PAGE_SIZE));
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("sort", "created");
-  url.searchParams.set("order", "desc");
-
-  const data = await githubFetch<{
-    items: GitHubIssue[];
-    total_count: number;
-  }>(url);
-
-  return { items: data.items, totalCount: data.total_count };
-};
-
-export const getIssuesByRepo = async (): Promise<RepoIssues[] | null> => {
-  try {
-    const firstPage = await fetchIssuesPage(1);
-    const pageCount = Math.min(
-      Math.ceil(firstPage.totalCount / PAGE_SIZE),
-      MAX_PAGES
-    );
-
-    const pages =
-      pageCount > 1
-        ? await Promise.all(
-            Array.from({ length: pageCount - 1 }, (_, index) =>
-              fetchIssuesPage(index + 2)
-            )
-          )
-        : [];
-
-    const issues = [...firstPage.items, ...pages.flatMap((page) => page.items)];
-
-    const grouped = new Map<string, GitHubIssue[]>();
-
-    for (const issue of issues) {
-      const name = issue.repository_url.split("/").at(-1);
-
-      if (!name) {
-        continue;
-      }
-
-      const bucket = grouped.get(name);
-
-      if (bucket) {
-        bucket.push(issue);
-      } else {
-        grouped.set(name, [issue]);
-      }
-    }
-
-    return [...grouped.entries()]
-      .map(([name, repoIssues]) => ({
-        count: repoIssues.length,
-        issues: repoIssues.toSorted(
-          (a, b) =>
-            contributorPriority(a) - contributorPriority(b) ||
-            b.created_at.localeCompare(a.created_at)
-        ),
-        name,
-        url: `https://github.com/shadcn-labs/${name}/issues`,
-      }))
-      .toSorted((a, b) => b.count - a.count);
-  } catch {
-    return null;
-  }
-};
-
 const fetchAllPages = async <T>(path: string, page = 1): Promise<T[]> => {
   if (page > MAX_PAGES) {
     return [];
@@ -201,6 +156,220 @@ const fetchAllPages = async <T>(path: string, page = 1): Promise<T[]> => {
   const rest = await fetchAllPages<T>(path, page + 1);
 
   return [...items, ...rest];
+};
+
+const searchIssuesPage = async (
+  query: string,
+  page: number
+): Promise<SearchPage> => {
+  const url = new URL(SEARCH_URL);
+  url.searchParams.set("q", query);
+  url.searchParams.set("per_page", String(PAGE_SIZE));
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("sort", "created");
+  url.searchParams.set("order", "desc");
+
+  const data = await githubFetch<{
+    items: GitHubIssue[];
+    total_count: number;
+  }>(url);
+
+  return { items: data.items, totalCount: data.total_count };
+};
+
+const remainingPages = (totalCount: number): number[] => {
+  const count = Math.min(Math.ceil(totalCount / PAGE_SIZE), MAX_PAGES);
+
+  return Array.from(
+    { length: Math.max(count - 1, 0) },
+    (_, index) => index + 2
+  );
+};
+
+const repoQuery = (repos: GitHubRepo[]): string =>
+  `${repos.map((repo) => `repo:${ORG}/${repo.name}`).join(" ")} type:issue state:open`;
+
+/**
+ * Every open issue in a group of repos, fetched with one query for the group.
+ *
+ * Several `repo:` qualifiers OR together, so a chunk of repos needs one query
+ * instead of one per repo. A single search query cannot page past
+ * SEARCH_RESULT_CAP results, so a group over the cap is split in half until
+ * each query fits. Any failure — rate limiting included — is thrown, never
+ * skipped, so getIssuesByRepo can serve the last good snapshot marked stale
+ * instead of caching a partial org as if it were complete.
+ */
+const fetchIssuesForRepos = async (
+  repos: GitHubRepo[]
+): Promise<GitHubIssue[]> => {
+  const query = repoQuery(repos);
+  const first = await searchIssuesPage(query, 1);
+
+  if (first.totalCount > SEARCH_RESULT_CAP && repos.length > 1) {
+    const middle = Math.ceil(repos.length / 2);
+    const [left, right] = await Promise.all([
+      fetchIssuesForRepos(repos.slice(0, middle)),
+      fetchIssuesForRepos(repos.slice(middle)),
+    ]);
+
+    return [...left, ...right];
+  }
+
+  if (first.totalCount > SEARCH_RESULT_CAP) {
+    console.warn(
+      `[github] ${repos[0].name} has more than ${SEARCH_RESULT_CAP} open issues; GitHub only returns the first ${SEARCH_RESULT_CAP}.`
+    );
+  }
+
+  const rest = await Promise.all(
+    remainingPages(first.totalCount).map((page) =>
+      searchIssuesPage(query, page)
+    )
+  );
+
+  return [first.items, ...rest.map((entry) => entry.items)].flat();
+};
+
+/**
+ * Split-repo replacement for the org-wide query, reached only once the org is
+ * past the SEARCH_RESULT_CAP result cap.
+ *
+ * Unauthenticated search allows 10 requests a minute while a complete refresh
+ * needs ceil(total / PAGE_SIZE) requests, so well past the cap a single burst
+ * can outrun the budget. That case fails as a whole and serves the previous
+ * snapshot marked stale (see getIssuesByRepo) rather than a half-org list.
+ */
+const fetchIssuesInChunks = async (): Promise<GitHubIssue[]> => {
+  const all = await fetchAllPages<GitHubRepo>(`/orgs/${ORG}/repos?type=public`);
+  const repos = all.filter((repo) => !repo.fork);
+
+  if (repos.length === 0) {
+    throw new Error("The split-repo issues fallback found no repositories");
+  }
+
+  const chunks = Array.from(
+    { length: Math.ceil(repos.length / REPOS_PER_QUERY) },
+    (_, index) =>
+      repos.slice(index * REPOS_PER_QUERY, (index + 1) * REPOS_PER_QUERY)
+  );
+
+  const results = await Promise.all(
+    chunks.map((chunk) => fetchIssuesForRepos(chunk))
+  );
+
+  return results.flat();
+};
+
+const fetchAllIssues = async (): Promise<GitHubIssue[]> => {
+  const first = await searchIssuesPage(ORG_QUERY, 1);
+
+  if (first.totalCount > SEARCH_RESULT_CAP) {
+    console.warn(
+      `[github] ${first.totalCount} open issues is over the ${SEARCH_RESULT_CAP} result search cap, falling back to split repo queries.`
+    );
+
+    return fetchIssuesInChunks();
+  }
+
+  const rest = await Promise.all(
+    remainingPages(first.totalCount).map((page) =>
+      searchIssuesPage(ORG_QUERY, page)
+    )
+  );
+
+  return [first.items, ...rest.map((entry) => entry.items)].flat();
+};
+
+const groupByRepo = (issues: GitHubIssue[]): RepoIssues[] => {
+  const grouped = new Map<string, GitHubIssue[]>();
+
+  for (const issue of issues) {
+    const name = issue.repository_url.split("/").at(-1);
+
+    if (!name) {
+      continue;
+    }
+
+    const bucket = grouped.get(name);
+
+    if (bucket) {
+      bucket.push(issue);
+    } else {
+      grouped.set(name, [issue]);
+    }
+  }
+
+  return [...grouped.entries()]
+    .map(([name, repoIssues]) => ({
+      count: repoIssues.length,
+      issues: repoIssues.toSorted(
+        (a, b) =>
+          contributorPriority(a) - contributorPriority(b) ||
+          b.created_at.localeCompare(a.created_at)
+      ),
+      name,
+      url: `https://github.com/${ORG}/${name}/issues`,
+    }))
+    .toSorted((a, b) => b.count - a.count);
+};
+
+interface CachedIssues {
+  expires: number;
+  snapshot: IssuesSnapshot;
+}
+
+const snapshotCache = new Map<string, CachedIssues>();
+
+/**
+ * Open issues across the org, grouped by repo, plus the time the data was
+ * actually fetched so the page can show how stale it is.
+ *
+ * Cached in-process for ISSUES_CACHE_TTL_SECONDS. The route wrapping this also
+ * sets an edge cache, so a cache hit never reaches GitHub at all. If a refresh
+ * fails we keep serving the last good snapshot rather than blanking the page,
+ * and remember the failure for FAILURE_CACHE_TTL_SECONDS so the retries do not
+ * stack up while GitHub is down.
+ */
+export const getIssuesByRepo = async (): Promise<IssuesSnapshot> => {
+  const cached = snapshotCache.get(ORG);
+
+  if (cached && cached.expires > Date.now()) {
+    return cached.snapshot;
+  }
+
+  try {
+    const issues = await fetchAllIssues();
+    const snapshot: IssuesSnapshot = {
+      fetchedAt: new Date().toISOString(),
+      groups: groupByRepo(issues),
+      stale: false,
+    };
+
+    snapshotCache.set(ORG, {
+      expires: Date.now() + ISSUES_CACHE_TTL_SECONDS * 1000,
+      snapshot,
+    });
+
+    return snapshot;
+  } catch (error) {
+    const snapshot: IssuesSnapshot = cached
+      ? { ...cached.snapshot, stale: true }
+      : { fetchedAt: null, groups: null, stale: true };
+
+    snapshotCache.set(ORG, {
+      expires: Date.now() + FAILURE_CACHE_TTL_SECONDS * 1000,
+      snapshot,
+    });
+
+    console.warn(
+      cached
+        ? `[github] Issues refresh failed, serving the snapshot from ${cached.snapshot.fetchedAt}.`
+        : "[github] Issues fetch failed and there is no snapshot to fall back on.",
+      error
+    );
+
+    return snapshot;
+  }
 };
 
 interface CachedContributors {
@@ -283,10 +452,10 @@ const loadContributors = async (org: string): Promise<Contributor[] | null> => {
  *
  * There is no aggregate endpoint on the GitHub REST API, so this costs one
  * request per repo. The route that calls this caches its response for
- * CACHE_TTL_SECONDS, and this in-process memo is a second layer that keeps a
- * warm server from re-fetching inside that window. Failures are memoized too,
- * for FAILURE_CACHE_TTL_SECONDS, so a rate-limited burst cannot spend the
- * anonymous 60 req/hr budget on retries. No token needed.
+ * CONTRIBUTORS_CACHE_TTL_SECONDS, and this in-process memo is a second layer
+ * that keeps a warm server from re-fetching inside that window. Failures are
+ * memoized too, for FAILURE_CACHE_TTL_SECONDS, so a rate-limited burst cannot
+ * spend the anonymous 60 req/hr budget on retries. No token needed.
  */
 export const getContributors = async (
   org = ORG
@@ -308,7 +477,9 @@ export const getContributors = async (
   contributorCache.set(org, {
     expires:
       Date.now() +
-      (contributors === null ? FAILURE_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS) *
+      (contributors === null
+        ? FAILURE_CACHE_TTL_SECONDS
+        : CONTRIBUTORS_CACHE_TTL_SECONDS) *
         1000,
     value: contributors,
   });

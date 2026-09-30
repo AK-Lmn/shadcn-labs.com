@@ -12,9 +12,9 @@ export default defineConfig({
       enabled: false,
     },
   }),
-  // Serves on-demand rendered routes (see src/pages/contributors.astro) from
-  // the Vercel edge, so the GitHub API is hit at most once per TTL no matter
-  // how many people load the page.
+  // Serves the on-demand routes (src/pages/issues.astro and
+  // src/pages/contributors.astro) from the Vercel edge, so GitHub is hit at
+  // most once per TTL no matter how many people load the pages.
   cache: {
     provider: cacheVercel(),
   },
