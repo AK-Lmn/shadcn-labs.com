@@ -112,45 +112,91 @@ const formatUpdatedAt = (value: string): string =>
     }
 
     {
-      groups?.map((group) => (
-        <>
-          <h3 class="pt-4">
-            <a target="_blank" href={addQueryParams(group.url, UTM_PARAMS)}>
-              {group.name}
-            </a>{" "}
-            <span class="font-mono">[{group.count}]</span>
-          </h3>
-          <ul class="space-y-2">
-            {group.issues.map((issue) => (
-              <li>
-                <a
-                  target="_blank"
-                  href={addQueryParams(issue.html_url, UTM_PARAMS)}
-                >
-                  #{issue.number} {issue.title}
-                </a>
-                <br />
-                {issue.labels.length > 0 && (
-                  <>
-                    <span class="inline-flex flex-wrap items-center gap-1.5">
-                      {issue.labels.map((label) => (
-                        <Badge key={label.name} variant="secondary">
-                          {label.name}
-                        </Badge>
-                      ))}
-                    </span>
-                    <br />
-                  </>
-                )}
-                <span class="text-muted-foreground">
-                  opened {formatDate(issue.created_at)} · {issue.comments}{" "}
-                  comment{issue.comments === 1 ? "" : "s"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ))
+      groups?.map((group) => {
+        const initialIssues = group.issues.slice(0, 10);
+        const remainingIssues = group.issues.slice(10);
+        const remainingCount = remainingIssues.length;
+
+        return (
+          <>
+            <h3 class="pt-4">
+              <a target="_blank" href={addQueryParams(group.url, UTM_PARAMS)}>
+                {group.name}
+              </a>{" "}
+              <span class="font-mono">[{group.count}]</span>
+            </h3>
+            <ul class="space-y-2">
+              {initialIssues.map((issue) => (
+                <li>
+                  <a
+                    target="_blank"
+                    href={addQueryParams(issue.html_url, UTM_PARAMS)}
+                  >
+                    #{issue.number} {issue.title}
+                  </a>
+                  <br />
+                  {issue.labels.length > 0 && (
+                    <>
+                      <span class="inline-flex flex-wrap items-center gap-1.5">
+                        {issue.labels.map((label) => (
+                          <Badge key={label.name} variant="secondary">
+                            {label.name}
+                          </Badge>
+                        ))}
+                      </span>
+                      <br />
+                    </>
+                  )}
+                  <span class="text-muted-foreground">
+                    opened {formatDate(issue.created_at)} · {issue.comments}{" "}
+                    comment{issue.comments === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            {remainingCount > 0 && (
+              <details class="group mt-2">
+                <summary class="cursor-pointer text-sm text-muted-foreground hover:text-foreground list-none font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <span class="group-open:hidden">
+                    Show {remainingCount} more issue{remainingCount === 1 ? "" : "s"}
+                  </span>
+                  <span class="hidden group-open:inline">Show less</span>
+                </summary>
+                <ul class="space-y-2 pt-2">
+                  {remainingIssues.map((issue) => (
+                    <li>
+                      <a
+                        target="_blank"
+                        href={addQueryParams(issue.html_url, UTM_PARAMS)}
+                      >
+                        #{issue.number} {issue.title}
+                      </a>
+                      <br />
+                      {issue.labels.length > 0 && (
+                        <>
+                          <span class="inline-flex flex-wrap items-center gap-1.5">
+                            {issue.labels.map((label) => (
+                              <Badge key={label.name} variant="secondary">
+                                {label.name}
+                              </Badge>
+                            ))}
+                          </span>
+                          <br />
+                        </>
+                      )}
+                      <span class="text-muted-foreground">
+                        opened {formatDate(issue.created_at)} · {issue.comments}{" "}
+                        comment{issue.comments === 1 ? "" : "s"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        );
+      })
     }
 
     {
