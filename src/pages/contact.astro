@@ -1,10 +1,6 @@
 ---
-import { CornerDownLeft } from "@lucide/astro";
 import AsciiDivider from "@/components/ascii-divider.astro";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Kbd } from "@/components/ui/kbd";
-import { Textarea } from "@/components/ui/textarea";
+import { ContactForm } from "@/components/contact-form";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { LINKS } from "@/constants/links";
 import { UTM_PARAMS } from "@/constants/site";
@@ -13,7 +9,7 @@ import { addQueryParams } from "@/lib/url";
 
 <BaseLayout
   title="Contact"
-  description="Get in touch with Shadcn Labs — send a message or reach us by email and X."
+  description="Get in touch with Shadcn Labs — send a message or reach us by email and Discord."
 >
   <AsciiDivider />
 
@@ -25,40 +21,12 @@ import { addQueryParams } from "@/lib/url";
       Send a message using the form, or reach out directly.
     </p>
 
-    <form
-      action={`https://formsubmit.co/${LINKS.EMAIL}`}
-      method="POST"
-      class="flex flex-col gap-4 pt-2"
-    >
-      <div class="flex flex-col gap-4 sm:flex-row">
-        <Input type="text" name="name" placeholder="John Doe" required />
-        <Input type="email" name="email" placeholder="john@doe.com" required />
-      </div>
-      <Textarea
-        name="message"
-        placeholder="Enter your message"
-        required
-        className="min-h-36"
-      />
-      <div class="flex items-center justify-between gap-4">
-        <Button type="submit">Send message</Button>
-        <span
-          class="text-muted-foreground inline-flex items-center gap-1 text-sm"
-        >
-          or
-          <Kbd>
-            <CornerDownLeft size={14} aria-hidden="true" />
-            Enter
-          </Kbd>
-          to send
-        </span>
-      </div>
-    </form>
+    <ContactForm client:load />
 
-    <p class="pt-4">
+    <p class="mt-6">
       Or email <a href={`mailto:${LINKS.EMAIL}`}>{LINKS.EMAIL}</a> or <a
         target="_blank"
-        href={addQueryParams(LINKS.FOUNDER_X_DM, UTM_PARAMS)}>DM us on X</a
+        href={addQueryParams(LINKS.DISCORD, UTM_PARAMS)}>join our Discord</a
       >.
     </p>
   </section>
