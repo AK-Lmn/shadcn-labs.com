@@ -1,6 +1,5 @@
 ---
 import AsciiDivider from "@/components/ascii-divider.astro";
-import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { PROJECTS } from "@/constants/projects";
 import { UTM_PARAMS } from "@/constants/site";
@@ -10,6 +9,7 @@ import {
   getIssuesByRepo,
 } from "@/lib/github";
 import { addQueryParams } from "@/lib/url";
+import { IssuesList } from "@/components/issues-list";
 
 // Rendered on demand so the edge cache can serve it for minutes at a time
 // instead of freezing a snapshot into the build.
@@ -42,13 +42,6 @@ const idleProjects = PROJECTS.filter(
 if (!listed.has("shadcn-labs.com")) {
   idleProjects.push("shadcn-labs.com");
 }
-
-const formatDate = (value: string): string =>
-  new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 
 const formatUpdatedAt = (value: string): string =>
   new Date(value).toLocaleString("en-US", {
@@ -101,64 +94,14 @@ const formatUpdatedAt = (value: string): string =>
       ) : total === 0 ? (
         <p>No open issues right now. Check back soon.</p>
       ) : (
-        <p>
-          <span class="font-mono">{total}</span> open issue
-          {total === 1 ? "" : "s"} across the labs. Issues marked{" "}
-          <Badge variant="secondary">good first issue</Badge> or{" "}
-          <Badge variant="secondary">help wanted</Badge> are a great place to
-          start.
-        </p>
-      )
-    }
-
-    {
-      groups?.map((group) => (
-        <>
-          <h3 class="pt-4">
-            <a target="_blank" href={addQueryParams(group.url, UTM_PARAMS)}>
-              {group.name}
-            </a>{" "}
-            <span class="font-mono">[{group.count}]</span>
-          </h3>
-          <ul class="space-y-2">
-            {group.issues.map((issue) => (
-              <li>
-                <a
-                  target="_blank"
-                  href={addQueryParams(issue.html_url, UTM_PARAMS)}
-                >
-                  #{issue.number} {issue.title}
-                </a>
-                <br />
-                {issue.labels.length > 0 && (
-                  <>
-                    <span class="inline-flex flex-wrap items-center gap-1.5">
-                      {issue.labels.map((label) => (
-                        <Badge key={label.name} variant="secondary">
-                          {label.name}
-                        </Badge>
-                      ))}
-                    </span>
-                    <br />
-                  </>
-                )}
-                <span class="text-muted-foreground">
-                  opened {formatDate(issue.created_at)} · {issue.comments}{" "}
-                  comment{issue.comments === 1 ? "" : "s"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ))
-    }
-
-    {
-      idleProjects.length > 0 && (
-        <p class="text-muted-foreground pt-4">
-          No open issues: {idleProjects.join(", ")}.
-        </p>
+        <IssuesList
+          client:load
+          groups={groups}
+          idleProjects={idleProjects}
+          total={total}
+        />
       )
     }
   </section>
 </BaseLayout>
+
