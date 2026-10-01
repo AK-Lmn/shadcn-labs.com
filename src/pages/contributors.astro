@@ -27,7 +27,7 @@ if (Astro.cache.enabled) {
           maxAge: CONTRIBUTORS_CACHE_TTL_SECONDS,
           swr: CONTRIBUTORS_CACHE_TTL_SECONDS,
           tags: ["contributors"],
-        }
+        },
   );
 }
 
@@ -54,10 +54,7 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
           Could not load contributors right now. See{" "}
           <a
             target="_blank"
-            href={addQueryParams(
-              "https://github.com/shadcn-labs",
-              UTM_PARAMS,
-            )}
+            href={addQueryParams("https://github.com/shadcn-labs", UTM_PARAMS)}
           >
             github.com/shadcn-labs
           </a>
@@ -102,7 +99,7 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
                   <span class="font-mono">{person.contributions}</span>{" "}
                   {person.contributions === 1 ? "commit" : "commits"} in{" "}
                   <Badge variant="secondary">
-                    {person.repos.length}{" "}
+                    <span class="font-mono">{person.repos.length}</span>
                     {person.repos.length === 1 ? "repo" : "repos"}
                   </Badge>
                 </span>
@@ -113,6 +110,4 @@ const repoCount = new Set(contributors?.flatMap((person) => person.repos)).size;
       )
     }
   </section>
-
-  <AsciiDivider />
 </BaseLayout>

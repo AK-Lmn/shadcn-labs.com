@@ -1,5 +1,7 @@
 ---
 import AsciiDivider from "@/components/ascii-divider.astro";
+import IssueListItem from "@/components/issue-list-item.astro";
+import { IssueCollapsible } from "@/components/issue-collapsible";
 import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/base-layout.astro";
 import { PROJECTS } from "@/constants/projects";
@@ -30,7 +32,7 @@ if (Astro.cache.enabled) {
           // so a GitHub hiccup never takes the page down.
           swr: 3600,
           tags: ["issues"],
-        }
+        },
   );
 }
 const total = groups?.reduce((sum, group) => sum + group.count, 0) ?? 0;
@@ -42,13 +44,6 @@ const idleProjects = PROJECTS.filter(
 if (!listed.has("shadcn-labs.com")) {
   idleProjects.push("shadcn-labs.com");
 }
-
-const formatDate = (value: string): string =>
-  new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 
 const formatUpdatedAt = (value: string): string =>
   new Date(value).toLocaleString("en-US", {
@@ -68,23 +63,26 @@ const formatUpdatedAt = (value: string): string =>
   <AsciiDivider />
 
   <section class="view-container" id="issues">
-    <h2>
-      <a href="#issues" class="view-container-title">OPEN ISSUES</a>
-    </h2>
-
-    {
-      fetchedAt && (
-        <p class="text-muted-foreground">
-          Last updated{" "}
-          <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
-          {
-            stale && (
-              <> · GitHub did not respond to the last refresh, so this may be out of date</>
-            )
-          }
-        </p>
-      )
-    }
+    <div class="flex justify-between items-center">
+      <h2>
+        <a href="#issues" class="view-container-title">OPEN ISSUES</a>
+      </h2>
+      {
+        fetchedAt && (
+          <p class="text-xs text-muted-foreground">
+            Last updated{" "}
+            <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
+            {stale && (
+              <>
+                {" "}
+                · GitHub did not respond to the last refresh, so this may be out
+                of date
+              </>
+            )}
+          </p>
+        )
+      }
+    </div>
 
     {
       groups === null ? (
@@ -113,8 +111,8 @@ const formatUpdatedAt = (value: string): string =>
 
     {
       groups?.map((group) => {
-        const initialIssues = group.issues.slice(0, 10);
-        const remainingIssues = group.issues.slice(10);
+        const initialIssues = group.issues.slice(0, 5);
+        const remainingIssues = group.issues.slice(5);
         const remainingCount = remainingIssues.length;
 
         return (
@@ -127,72 +125,16 @@ const formatUpdatedAt = (value: string): string =>
             </h3>
             <ul class="space-y-2">
               {initialIssues.map((issue) => (
-                <li>
-                  <a
-                    target="_blank"
-                    href={addQueryParams(issue.html_url, UTM_PARAMS)}
-                  >
-                    #{issue.number} {issue.title}
-                  </a>
-                  <br />
-                  {issue.labels.length > 0 && (
-                    <>
-                      <span class="inline-flex flex-wrap items-center gap-1.5">
-                        {issue.labels.map((label) => (
-                          <Badge key={label.name} variant="secondary">
-                            {label.name}
-                          </Badge>
-                        ))}
-                      </span>
-                      <br />
-                    </>
-                  )}
-                  <span class="text-muted-foreground">
-                    opened {formatDate(issue.created_at)} · {issue.comments}{" "}
-                    comment{issue.comments === 1 ? "" : "s"}
-                  </span>
-                </li>
+                <IssueListItem issue={issue} />
               ))}
             </ul>
 
             {remainingCount > 0 && (
-              <details class="group mt-2">
-                <summary class="cursor-pointer text-sm text-muted-foreground hover:text-foreground list-none font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                  <span class="group-open:hidden">
-                    Show {remainingCount} more issue{remainingCount === 1 ? "" : "s"}
-                  </span>
-                  <span class="hidden group-open:inline">Show less</span>
-                </summary>
-                <ul class="space-y-2 pt-2">
-                  {remainingIssues.map((issue) => (
-                    <li>
-                      <a
-                        target="_blank"
-                        href={addQueryParams(issue.html_url, UTM_PARAMS)}
-                      >
-                        #{issue.number} {issue.title}
-                      </a>
-                      <br />
-                      {issue.labels.length > 0 && (
-                        <>
-                          <span class="inline-flex flex-wrap items-center gap-1.5">
-                            {issue.labels.map((label) => (
-                              <Badge key={label.name} variant="secondary">
-                                {label.name}
-                              </Badge>
-                            ))}
-                          </span>
-                          <br />
-                        </>
-                      )}
-                      <span class="text-muted-foreground">
-                        opened {formatDate(issue.created_at)} · {issue.comments}{" "}
-                        comment{issue.comments === 1 ? "" : "s"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
+              <IssueCollapsible client:visible count={remainingCount}>
+                {remainingIssues.map((issue) => (
+                  <IssueListItem issue={issue} />
+                ))}
+              </IssueCollapsible>
             )}
           </>
         );
