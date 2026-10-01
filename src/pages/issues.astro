@@ -30,7 +30,7 @@ if (Astro.cache.enabled) {
           // so a GitHub hiccup never takes the page down.
           swr: 3600,
           tags: ["issues"],
-        }
+        },
   );
 }
 const total = groups?.reduce((sum, group) => sum + group.count, 0) ?? 0;
@@ -61,23 +61,26 @@ const formatUpdatedAt = (value: string): string =>
   <AsciiDivider />
 
   <section class="view-container" id="issues">
-    <h2>
-      <a href="#issues" class="view-container-title">OPEN ISSUES</a>
-    </h2>
-
-    {
-      fetchedAt && (
-        <p class="text-muted-foreground">
-          Last updated{" "}
-          <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
-          {
-            stale && (
-              <> · GitHub did not respond to the last refresh, so this may be out of date</>
-            )
-          }
-        </p>
-      )
-    }
+    <div class="flex justify-between items-center">
+      <h2>
+        <a href="#issues" class="view-container-title">OPEN ISSUES</a>
+      </h2>
+      {
+        fetchedAt && (
+          <p class="text-xs text-muted-foreground">
+            Last updated{" "}
+            <time datetime={fetchedAt}>{formatUpdatedAt(fetchedAt)}</time>
+            {stale && (
+              <>
+                {" "}
+                · GitHub did not respond to the last refresh, so this may be out
+                of date
+              </>
+            )}
+          </p>
+        )
+      }
+    </div>
 
     {
       groups === null ? (
@@ -104,4 +107,3 @@ const formatUpdatedAt = (value: string): string =>
     }
   </section>
 </BaseLayout>
-

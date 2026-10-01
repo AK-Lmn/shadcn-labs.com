@@ -45,6 +45,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 [MIT](LICENSE)
 
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=shadcn-labs/shadcn-labs.com)](https://github.com/shadcn-labs/shadcn-labs.com/graphs/contributors)
+
+> Made with [contrib.rocks](https://contrib.rocks)
+
+## Stats
+
+![Stats](https://repobeats.axiom.co/api/embed/432fe3d2799ee308efb727827cf916db4d0bd60a.svg "Repobeats analytics image")
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=shadcn-labs%2Fshadcn-labs.com&type=date&legend=top-left">

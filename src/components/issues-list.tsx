@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { IssueCollapsible } from "@/components/issue-collapsible";
+import { IssueListItem } from "@/components/issue-list-item";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,12 +27,7 @@ interface IssuesListProps {
   total: number;
 }
 
-const formatDate = (value: string): string =>
-  new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+const INITIAL_VISIBLE = 5;
 
 export const IssuesList = ({
   groups,
@@ -49,7 +46,9 @@ export const IssuesList = ({
   // Read URL query params on initial mount
   useEffect(() => {
     setIsHydrated(true);
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const params = new URLSearchParams(window.location.search);
     const qParam = params.get("q");
@@ -75,7 +74,9 @@ export const IssuesList = ({
 
   // Sync state to URL search parameters
   useEffect(() => {
-    if (!isHydrated || typeof window === "undefined") return;
+    if (!isHydrated || typeof window === "undefined") {
+      return;
+    }
 
     const url = new URL(window.location.href);
     const trimmed = debouncedQuery.trim();
@@ -124,10 +125,14 @@ export const IssuesList = ({
   const hasActiveFilter = Boolean(normalizedQuery || selectedRepo !== "all");
 
   const matchesIssue = (issue: GitHubIssue): boolean => {
-    if (!normalizedQuery) return true;
+    if (!normalizedQuery) {
+      return true;
+    }
 
     // Match title
-    if (issue.title.toLowerCase().includes(normalizedQuery)) return true;
+    if (issue.title.toLowerCase().includes(normalizedQuery)) {
+      return true;
+    }
 
     // Match issue number (#13, 13)
     const numStr = String(issue.number);
@@ -146,7 +151,9 @@ export const IssuesList = ({
   };
 
   const filteredGroups = useMemo(() => {
-    if (!groups) return [];
+    if (!groups) {
+      return [];
+    }
 
     return groups
       .filter((group) => {
@@ -187,7 +194,7 @@ export const IssuesList = ({
             Search issues
           </label>
           <Search
-            className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2 pointer-events-none"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
             aria-hidden="true"
           />
           <Input
@@ -207,9 +214,9 @@ export const IssuesList = ({
                 }
               }
             }}
-            className="pl-9 pr-10"
+            className="pr-10 pl-9"
           />
-          <div className="absolute top-1/2 right-2.5 -translate-y-1/2 flex items-center">
+          <div className="absolute top-1/2 right-2.5 flex -translate-y-1/2 items-center">
             {searchQuery ? (
               <button
                 type="button"
@@ -218,7 +225,7 @@ export const IssuesList = ({
                   setDebouncedQuery("");
                   searchInputRef.current?.focus();
                 }}
-                className="text-muted-foreground hover:text-foreground cursor-pointer p-0.5 rounded transition-colors"
+                className="text-muted-foreground hover:text-foreground cursor-pointer rounded p-0.5 transition-colors"
                 aria-label="Clear search input"
               >
                 <X className="size-3.5" aria-hidden="true" />
@@ -235,7 +242,9 @@ export const IssuesList = ({
           <Select
             value={selectedRepo}
             onValueChange={(val) => {
-              if (val !== null) setSelectedRepo(val);
+              if (val !== null) {
+                setSelectedRepo(val);
+              }
             }}
           >
             <SelectTrigger
@@ -291,15 +300,16 @@ export const IssuesList = ({
         {hasActiveFilter ? (
           <>
             Showing{" "}
-            <span className="font-mono text-foreground">
+            <span className="text-foreground font-mono">
               {visibleIssuesCount}
             </span>{" "}
-            of <span className="font-mono text-foreground">{total}</span> open
+            of <span className="text-foreground font-mono">{total}</span> open
             issue{total === 1 ? "" : "s"} across the labs.
           </>
         ) : (
           <>
-            <span className="font-mono text-foreground">{total}</span> open issue
+            <span className="text-foreground font-mono">{total}</span> open
+            issue
             {total === 1 ? "" : "s"} across the labs. Issues marked{" "}
             <Badge variant="secondary">good first issue</Badge> or{" "}
             <Badge variant="secondary">help wanted</Badge> are a great place to
@@ -310,7 +320,7 @@ export const IssuesList = ({
 
       {/* Issues Grouped by Repo */}
       {filteredGroups.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground border border-dashed rounded-lg">
+        <div className="text-muted-foreground rounded-lg border border-dashed py-8 text-center">
           <p>No issues match your search.</p>
           <Button
             variant="outline"
@@ -323,45 +333,41 @@ export const IssuesList = ({
         </div>
       ) : (
         <div className="space-y-6">
-          {filteredGroups.map((group) => (
-            <div key={group.name} className="space-y-2">
-              <h3 className="pt-2">
-                <a target="_blank" href={addQueryParams(group.url, UTM_PARAMS)}>
-                  {group.name}
-                </a>{" "}
-                <span className="font-mono">[{group.issues.length}]</span>
-              </h3>
-              <ul className="space-y-2">
-                {group.issues.map((issue) => (
-                  <li key={issue.number}>
-                    <a
-                      target="_blank"
-                      href={addQueryParams(issue.html_url, UTM_PARAMS)}
-                    >
-                      #{issue.number} {issue.title}
-                    </a>
-                    <br />
-                    {issue.labels.length > 0 && (
-                      <>
-                        <span className="inline-flex flex-wrap items-center gap-1.5">
-                          {issue.labels.map((label) => (
-                            <Badge key={label.name} variant="secondary">
-                              {label.name}
-                            </Badge>
-                          ))}
-                        </span>
-                        <br />
-                      </>
-                    )}
-                    <span className="text-muted-foreground text-sm">
-                      opened {formatDate(issue.created_at)} · {issue.comments}{" "}
-                      comment{issue.comments === 1 ? "" : "s"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {filteredGroups.map((group) => {
+            const collapse = normalizedQuery.length === 0;
+            const visibleIssues = collapse
+              ? group.issues.slice(0, INITIAL_VISIBLE)
+              : group.issues;
+            const hiddenIssues = collapse
+              ? group.issues.slice(INITIAL_VISIBLE)
+              : [];
+
+            return (
+              <div key={group.name} className="space-y-2">
+                <h3 className="pt-2">
+                  <a
+                    target="_blank"
+                    href={addQueryParams(group.url, UTM_PARAMS)}
+                  >
+                    {group.name}
+                  </a>{" "}
+                  <span className="font-mono">[{group.issues.length}]</span>
+                </h3>
+                <ul className="space-y-2">
+                  {visibleIssues.map((issue) => (
+                    <IssueListItem key={issue.number} issue={issue} />
+                  ))}
+                </ul>
+                {hiddenIssues.length > 0 && (
+                  <IssueCollapsible count={hiddenIssues.length}>
+                    {hiddenIssues.map((issue) => (
+                      <IssueListItem key={issue.number} issue={issue} />
+                    ))}
+                  </IssueCollapsible>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
